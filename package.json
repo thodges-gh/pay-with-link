@@ -1,0 +1,17 @@
+{
+  "name": "pay-with-link",
+  "version": "0.1.0",
+  "scripts": {
+    "test": "truffle test"
+  },
+  "author": "Thomas Hodges (thomas@smartcontract.com)",
+  "license": "MIT",
+  "dependencies": {
+    "@chainlink/contracts": "0.0.9",
+    "@openzeppelin/contracts": "^3.1.0",
+    "@truffle/hdwallet-provider": "^1.0.42"
+  },
+  "devDependencies": {
+    "@openzeppelin/test-helpers": "^0.5.6"
+  }
+}
