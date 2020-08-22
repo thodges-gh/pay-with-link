@@ -46,7 +46,7 @@ contract Subscriber is ERC721 {
 
   /**
    * @notice Burns the provided subscription ID
-   * @param _subscriberID the tokenId of the NFT
+   * @param _subscriberId the tokenId of the NFT
    */
   function burn(
     uint256 _subscriberId
