@@ -6,6 +6,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./Subscriber.sol";
 
+/**
+ * @title PaymentHandler
+ * @notice Deployed by a service provider, allows NFTs to be issued representing
+ * a subscription.
+ */
 contract PaymentHandler is Ownable {
   using SafeMath for uint256;
 
@@ -22,6 +27,16 @@ contract PaymentHandler is Ownable {
   event SetPaymentAmount(uint256 paymentAmount);
   event SetSubscribeDuration(uint256 subscriptionDuration);
 
+  /**
+   * @notice Deploys the contract specific to the service provider, also deploys
+   * a NFT contract specific to the service
+   * @param _link The address of the LINK token contract
+   * @param _feed The address of the LINK/USD reference feed
+   * @param _paymentAmount The amount of payment per subscription
+   * @param _subscriptionDuration The length of time a subscription lasts
+   * @param _name The name of the service (for NFT)
+   * @param _symbol The symbol of the service (for NFT)
+   */
   constructor(
     address _link,
     address _feed,
@@ -39,6 +54,11 @@ contract PaymentHandler is Ownable {
     subscriber = new Subscriber(_name, _symbol);
   }
 
+  /**
+   * @notice Called by the owner to set the address of the LINK/USD reference feed
+   * @dev This can be set to the 0 address to use direct LINK payment
+   * @param _feed The address of the LINK/USD reference feed
+   */
   function setFeed(
     address _feed
   )
@@ -49,6 +69,12 @@ contract PaymentHandler is Ownable {
     emit SetFeed(address(_feed));
   }
 
+  /**
+   * @notice Called by the owner to set the payment amount
+   * @dev The paymentAmount is denominated in USD if a feed is set
+   * and directly in LINK if no feed is set
+   * @param _paymentAmount The amount of payment per subscription
+   */
   function setPaymentAmount(
     uint256 _paymentAmount
   )
@@ -59,6 +85,10 @@ contract PaymentHandler is Ownable {
     emit SetPaymentAmount(_paymentAmount);
   }
 
+  /**
+   * @notice Called by the owner to set the subscription duration
+   * @param _subscriptionDuration The length of time a subscription lasts
+   */
   function setSubscribeDuration(
     uint256 _subscriptionDuration
   )
@@ -69,6 +99,11 @@ contract PaymentHandler is Ownable {
     emit SetSubscribeDuration(_subscriptionDuration);
   }
 
+  /**
+   * @notice Called by the owner to withdraw LINK payment sent to this contract
+   * @param _amount The amount of LINK to withdraw
+   * @param _recipient The address to receive the LINK
+   */
   function withdraw(
     uint256 _amount,
     address _recipient
@@ -79,6 +114,9 @@ contract PaymentHandler is Ownable {
     linkToken.transfer(_recipient, _amount);
   }
 
+  /**
+   * @notice Provides the amount of LINK to send for a subscription
+   */
   function price() public view returns (uint256 _price) {
     // allows payment to be specified in LINK or USD
     if (address(feed) != address(0)) {
@@ -90,6 +128,14 @@ contract PaymentHandler is Ownable {
 
   }
 
+  /**
+   * @notice Called by the LINK token on `transferAndCall`
+   * @dev Subscriptions can be extended by providing the previous ID of
+   * another active subscription owned by the sender
+   * @param _sender The address submitting payment
+   * @param _amount The amount of LINK for payment
+   * @param _data The encoded previous subscription ID (optional)
+   */
   function onTokenTransfer(
     address _sender,
     uint256 _amount,
@@ -118,6 +164,9 @@ contract PaymentHandler is Ownable {
     emit NewSubscription(_sender, subscriberId, endAt);
   }
 
+  /**
+   * @dev Reverts if msg.sender is not the LINK token
+   */
   modifier onlyLINK() {
     require(msg.sender == address(linkToken), "!LINK");
     _;
