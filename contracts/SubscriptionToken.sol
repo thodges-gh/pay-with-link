@@ -2,20 +2,22 @@ pragma solidity 0.6.12;
 
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorInterface.sol";
 import "@chainlink/contracts/src/v0.6/interfaces/LinkTokenInterface.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "./Subscriber.sol";
 
 /**
- * @title PaymentHandler
- * @notice Deployed by a service provider, allows NFTs to be issued representing
- * a subscription.
+ * @title SubscriptionToken
+ * @notice NFT representing a service subscription. Deployed by a service provider,
+ * allows NFTs to be issued representing a subscription.
  */
-contract PaymentHandler is Ownable {
+contract SubscriptionToken is ERC721, Ownable {
+  using Counters for Counters.Counter;
   using SafeMath for uint256;
+  Counters.Counter private _tokenIds;
 
   LinkTokenInterface public immutable linkToken;
-  Subscriber public immutable subscriber;
   AggregatorInterface public feed;
   uint256 public paymentAmount;
   uint256 public subscriptionDuration;
@@ -28,14 +30,12 @@ contract PaymentHandler is Ownable {
   event SetSubscribeDuration(uint256 subscriptionDuration);
 
   /**
-   * @notice Deploys the contract specific to the service provider, also deploys
-   * a NFT contract specific to the service
    * @param _link The address of the LINK token contract
    * @param _feed The address of the LINK/USD reference feed
    * @param _paymentAmount The amount of payment per subscription
    * @param _subscriptionDuration The length of time a subscription lasts
-   * @param _name The name of the service (for NFT)
-   * @param _symbol The symbol of the service (for NFT)
+   * @param _name The name of the service
+   * @param _symbol The symbol of the service
    */
   constructor(
     address _link,
@@ -46,12 +46,75 @@ contract PaymentHandler is Ownable {
     string memory _symbol
   )
     public
+    ERC721(_name, _symbol)
   {
     linkToken = LinkTokenInterface(_link);
     setFeed(_feed);
     setPaymentAmount(_paymentAmount);
     setSubscribeDuration(_subscriptionDuration);
-    subscriber = new Subscriber(_name, _symbol);
+  }
+
+  /**
+   * @notice Called by the LINK token on `transferAndCall`
+   * @dev Subscriptions can be extended by providing the previous ID of
+   * another active subscription owned by the sender
+   * @param _sender The address submitting payment
+   * @param _amount The amount of LINK for payment
+   * @param _data The encoded previous subscription ID (optional)
+   */
+  function onTokenTransfer(
+    address _sender,
+    uint256 _amount,
+    bytes calldata _data
+  )
+    external
+    onlyLINK()
+  {
+    // reverts if not enough payment supplied
+    uint256 over = _amount.sub(price());
+    uint256 subscriberId = subscribe(_sender);
+    ( uint256 previousId ) = abi.decode(_data, (uint256));
+    uint256 endAt;
+    if (previousId > 0) {
+      require(ownerOf(previousId) == _sender, "!owner");
+      // reverts if previousId is expired
+      uint256 extension = subscriberExpiration[previousId].sub(block.timestamp);
+      endAt = subscriptionDuration.add(block.timestamp).add(extension);
+      burn(previousId);
+    } else {
+      endAt = subscriptionDuration.add(block.timestamp);
+    }
+    subscriberExpiration[subscriberId] = endAt;
+    // refund if extra payment supplied
+    if (over > 0) linkToken.transfer(_sender, over);
+    emit NewSubscription(_sender, subscriberId, endAt);
+  }
+
+  /**
+   * @notice Creates a new NFT representing a new subscription
+   * @param _subscriber The address of the subscriber
+   */
+  function subscribe(
+    address _subscriber
+  )
+    internal
+    returns (uint256 _subscriberId)
+  {
+    _tokenIds.increment();
+    _subscriberId = _tokenIds.current();
+    _safeMint(_subscriber, _subscriberId);
+  }
+
+  /**
+   * @notice Burns the provided subscription ID
+   * @param _subscriberId the tokenId of the NFT
+   */
+  function burn(
+    uint256 _subscriberId
+  )
+    internal
+  {
+    _burn(_subscriberId);
   }
 
   /**
@@ -120,48 +183,12 @@ contract PaymentHandler is Ownable {
   function price() public view returns (uint256 _price) {
     // allows payment to be specified in LINK or USD
     if (address(feed) != address(0)) {
-      uint256 currentPrice = uint256(feed.latestAnswer()).mul(10**10);
-      _price = paymentAmount.mul(1 ether).div(currentPrice);
+      uint256 currentPrice = uint256(feed.latestAnswer()).mul(1e10);
+      _price = paymentAmount.mul(1e18).div(currentPrice);
     } else {
       _price = paymentAmount;
     }
 
-  }
-
-  /**
-   * @notice Called by the LINK token on `transferAndCall`
-   * @dev Subscriptions can be extended by providing the previous ID of
-   * another active subscription owned by the sender
-   * @param _sender The address submitting payment
-   * @param _amount The amount of LINK for payment
-   * @param _data The encoded previous subscription ID (optional)
-   */
-  function onTokenTransfer(
-    address _sender,
-    uint256 _amount,
-    bytes calldata _data
-  )
-    external
-    onlyLINK()
-  {
-    // reverts if not enough payment supplied
-    uint256 over = _amount.sub(price());
-    uint256 subscriberId = subscriber.subscribe(_sender);
-    ( uint256 previousId ) = abi.decode(_data, (uint256));
-    uint256 endAt;
-    if (previousId > 0) {
-      require(subscriber.ownerOf(previousId) == _sender, "!owner");
-      // reverts if previousId is expired
-      uint256 extension = subscriberExpiration[previousId].sub(block.timestamp);
-      endAt = subscriptionDuration.add(block.timestamp).add(extension);
-      subscriber.burn(previousId);
-    } else {
-      endAt = subscriptionDuration.add(block.timestamp);
-    }
-    subscriberExpiration[subscriberId] = endAt;
-    // refund if extra payment supplied
-    if (over > 0) linkToken.transfer(_sender, over);
-    emit NewSubscription(_sender, subscriberId, endAt);
   }
 
   /**

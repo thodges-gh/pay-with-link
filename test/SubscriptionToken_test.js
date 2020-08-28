@@ -1,10 +1,9 @@
-const PaymentHandler = artifacts.require('PaymentHandler')
-const Subscriber = artifacts.require('Subscriber')
+const SubscriptionToken = artifacts.require('SubscriptionToken')
 const { LinkToken } = require('@chainlink/contracts/truffle/v0.4/LinkToken')
 const { MockV2Aggregator } = require('@chainlink/contracts/truffle/v0.6/MockV2Aggregator')
 const { BN, constants, expectEvent, expectRevert, time } = require('@openzeppelin/test-helpers')
 
-contract('PaymentHandler', (accounts) => {
+contract('SubscriptionToken', (accounts) => {
   const maintainer = accounts[0]
   const user1 = accounts[1]
   const user2 = accounts[2]
@@ -16,14 +15,14 @@ contract('PaymentHandler', (accounts) => {
   const name = 'Service Name'
   const symbol = 'SYM'
 
-  let paymentHandler, subscriber, link, feed
+  let subscriptionToken, link, feed
 
   beforeEach(async () => {
     MockV2Aggregator.setProvider(web3.currentProvider)
     LinkToken.setProvider(web3.currentProvider)
     feed = await MockV2Aggregator.new(linkUsd, { from: maintainer })
     link = await LinkToken.new({ from: maintainer })
-    paymentHandler = await PaymentHandler.new(
+    subscriptionToken = await SubscriptionToken.new(
       link.address,
       feed.address,
       paymentAmount,
@@ -32,17 +31,14 @@ contract('PaymentHandler', (accounts) => {
       symbol,
       { from: maintainer },
     )
-    subscriber = await Subscriber.at(await paymentHandler.subscriber())
   })
 
   describe('constructor', () => {
     it('deploys with the provided variables', async () => {
-      assert.equal(feed.address, await paymentHandler.feed())
-      assert.equal(link.address, await paymentHandler.linkToken())
-      assert.notEqual(constants.ZERO_ADDRESS, await paymentHandler.subscriber())
-      assert.equal(paymentAmount, await paymentHandler.paymentAmount())
-      assert.equal(subscriptionDuration, await paymentHandler.subscriptionDuration())
-      assert.equal(paymentHandler.address, await subscriber.handler())
+      assert.equal(feed.address, await subscriptionToken.feed())
+      assert.equal(link.address, await subscriptionToken.linkToken())
+      assert.equal(paymentAmount, await subscriptionToken.paymentAmount())
+      assert.equal(subscriptionDuration, await subscriptionToken.subscriptionDuration())
     })
   })
 
@@ -50,7 +46,7 @@ contract('PaymentHandler', (accounts) => {
     context('when called by a stranger', () => {
       it('reverts', async () => {
         await expectRevert(
-          paymentHandler.setFeed(constants.ZERO_ADDRESS, { from: stranger }),
+          subscriptionToken.setFeed(constants.ZERO_ADDRESS, { from: stranger }),
           'Ownable: caller is not the owner'
         )
       })
@@ -58,8 +54,8 @@ contract('PaymentHandler', (accounts) => {
 
     context('when called by the owner', () => {
       it('sets the feed address', async () => {
-        const { receipt } = await paymentHandler.setFeed(constants.ZERO_ADDRESS, { from: maintainer })
-        assert.equal(constants.ZERO_ADDRESS, await paymentHandler.feed())
+        const { receipt } = await subscriptionToken.setFeed(constants.ZERO_ADDRESS, { from: maintainer })
+        assert.equal(constants.ZERO_ADDRESS, await subscriptionToken.feed())
         expectEvent(receipt, 'SetFeed', {
           feed: constants.ZERO_ADDRESS,
         })
@@ -71,7 +67,7 @@ contract('PaymentHandler', (accounts) => {
     context('when called by a stranger', () => {
       it('reverts', async () => {
         await expectRevert(
-          paymentHandler.setPaymentAmount(0, { from: stranger }),
+          subscriptionToken.setPaymentAmount(0, { from: stranger }),
           'Ownable: caller is not the owner'
         )
       })
@@ -79,8 +75,8 @@ contract('PaymentHandler', (accounts) => {
 
     context('when called by the owner', () => {
       it('sets the paymentAmount', async () => {
-        const { receipt } = await paymentHandler.setPaymentAmount(0, { from: maintainer })
-        assert.equal(0, await paymentHandler.paymentAmount())
+        const { receipt } = await subscriptionToken.setPaymentAmount(0, { from: maintainer })
+        assert.equal(0, await subscriptionToken.paymentAmount())
         expectEvent(receipt, 'SetPaymentAmount', {
           paymentAmount: '0',
         })
@@ -92,7 +88,7 @@ contract('PaymentHandler', (accounts) => {
     context('when called by a stranger', () => {
       it('reverts', async () => {
         await expectRevert(
-          paymentHandler.setSubscribeDuration(301, { from: stranger }),
+          subscriptionToken.setSubscribeDuration(301, { from: stranger }),
           'Ownable: caller is not the owner'
         )
       })
@@ -100,8 +96,8 @@ contract('PaymentHandler', (accounts) => {
 
     context('when called by the owner', () => {
       it('sets the subscriptionDuration', async () => {
-        const { receipt } = await paymentHandler.setSubscribeDuration(301, { from: maintainer })
-        assert.equal(301, await paymentHandler.subscriptionDuration())
+        const { receipt } = await subscriptionToken.setSubscribeDuration(301, { from: maintainer })
+        assert.equal(301, await subscriptionToken.subscriptionDuration())
         expectEvent(receipt, 'SetSubscribeDuration', {
           subscriptionDuration: '301',
         })
@@ -111,13 +107,13 @@ contract('PaymentHandler', (accounts) => {
 
   describe('withdraw', () => {
     beforeEach(async () => {
-      await link.transfer(paymentHandler.address, 1, { from: maintainer })
+      await link.transfer(subscriptionToken.address, 1, { from: maintainer })
     })
 
     context('when called by a stranger', () => {
       it('reverts', async () => {
         await expectRevert(
-          paymentHandler.withdraw(1, stranger, { from: stranger }),
+          subscriptionToken.withdraw(1, stranger, { from: stranger }),
           'Ownable: caller is not the owner'
         )
       })
@@ -126,7 +122,7 @@ contract('PaymentHandler', (accounts) => {
     context('when called by the owner', () => {
       it('transfers the LINK to the recipient', async () => {
         assert.equal(0, await link.balanceOf(stranger))
-        await paymentHandler.withdraw(1, stranger, { from: maintainer })
+        await subscriptionToken.withdraw(1, stranger, { from: maintainer })
         assert.equal(1, await link.balanceOf(stranger))
       })
     })
@@ -135,20 +131,20 @@ contract('PaymentHandler', (accounts) => {
   describe('onTokenTransfer', () => {
     context('when payment is specified in LINK', () => {
       beforeEach(async () => {
-        await paymentHandler.setFeed(constants.ZERO_ADDRESS, { from: maintainer })
-        assert.equal(constants.ZERO_ADDRESS, await paymentHandler.feed())
+        await subscriptionToken.setFeed(constants.ZERO_ADDRESS, { from: maintainer })
+        assert.equal(constants.ZERO_ADDRESS, await subscriptionToken.feed())
         await link.transfer(user1, 1, { from: maintainer })
         assert.equal(1, await link.balanceOf(user1))
         await link.transfer(user2, 3, { from: maintainer })
         assert.equal(3, await link.balanceOf(user2))
-        await paymentHandler.setPaymentAmount(2, { from: maintainer })
-        assert.equal(2, await paymentHandler.paymentAmount())
+        await subscriptionToken.setPaymentAmount(2, { from: maintainer })
+        assert.equal(2, await subscriptionToken.paymentAmount())
       })
 
       context('when not enough payment is provided', () => {
         it('reverts', async () => {
           await expectRevert.unspecified(
-            link.transferAndCall(paymentHandler.address, 1, constants.ZERO_BYTES32, { from: user1 })
+            link.transferAndCall(subscriptionToken.address, 1, constants.ZERO_BYTES32, { from: user1 })
           )
         })
       })
@@ -156,16 +152,16 @@ contract('PaymentHandler', (accounts) => {
       context('when equal payment is provided', () => {
         it('creates a subscription', async () => {
           const { tx } = await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             2,
             constants.ZERO_BYTES32,
             { from: user2 },
           )
-          await expectEvent.inTransaction(tx, paymentHandler, 'NewSubscription', {
+          await expectEvent.inTransaction(tx, subscriptionToken, 'NewSubscription', {
             subscriber: user2,
             subscriberId: '1',
           })
-          const expiration = await paymentHandler.subscriberExpiration(1)
+          const expiration = await subscriptionToken.subscriberExpiration(1)
           assert.closeTo(
             subscriptionDuration,
             expiration.sub(new BN(await time.latest())).toNumber(),
@@ -177,16 +173,16 @@ contract('PaymentHandler', (accounts) => {
       context('when too much payment is provided', () => {
         it('creates a subscription and sends extra payment back to the user', async () => {
           const { tx } = await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             3,
             constants.ZERO_BYTES32,
             { from: user2 },
           )
-          await expectEvent.inTransaction(tx, paymentHandler, 'NewSubscription', {
+          await expectEvent.inTransaction(tx, subscriptionToken, 'NewSubscription', {
             subscriber: user2,
             subscriberId: '1',
           })
-          const expiration = await paymentHandler.subscriberExpiration(1)
+          const expiration = await subscriptionToken.subscriberExpiration(1)
           assert.closeTo(
             subscriptionDuration,
             expiration.sub(new BN(await time.latest())).toNumber(),
@@ -203,12 +199,12 @@ contract('PaymentHandler', (accounts) => {
           await link.transfer(user2, 1, { from: maintainer })
           assert.equal(4, await link.balanceOf(user2))
           await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             2,
             constants.ZERO_BYTES32,
             { from: user2 },
           )
-          previousExpiration = await paymentHandler.subscriberExpiration(1)
+          previousExpiration = await subscriptionToken.subscriberExpiration(1)
           assert.closeTo(
             subscriptionDuration,
             previousExpiration.sub(new BN(await time.latest())).toNumber(),
@@ -218,19 +214,19 @@ contract('PaymentHandler', (accounts) => {
 
         it('extends the subscription and burns the previous subscription', async () => {
           await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             2,
             web3.eth.abi.encodeParameter('uint256', 1),
             { from: user2 },
           )
-          const expiration = await paymentHandler.subscriberExpiration(2)
+          const expiration = await subscriptionToken.subscriberExpiration(2)
           assert.closeTo(
             new BN(subscriptionDuration).mul(new BN(2)).toNumber(),
             expiration.sub(new BN(await time.latest())).toNumber(),
             20,
           )
           await expectRevert(
-            subscriber.ownerOf(1),
+            subscriptionToken.ownerOf(1),
             'ERC721: owner query for nonexistent token',
           )
         })
@@ -243,12 +239,12 @@ contract('PaymentHandler', (accounts) => {
           await link.transfer(user2, 1, { from: maintainer })
           assert.equal(4, await link.balanceOf(user2))
           await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             2,
             constants.ZERO_BYTES32,
             { from: user2 },
           )
-          previousExpiration = await paymentHandler.subscriberExpiration(1)
+          previousExpiration = await subscriptionToken.subscriberExpiration(1)
           assert.closeTo(
             subscriptionDuration,
             previousExpiration.sub(new BN(await time.latest())).toNumber(),
@@ -260,7 +256,7 @@ contract('PaymentHandler', (accounts) => {
         it('reverts', async () => {
           await expectRevert.unspecified(
             link.transferAndCall(
-              paymentHandler.address,
+              subscriptionToken.address,
               2,
               web3.eth.abi.encodeParameter('uint256', 1),
               { from: user2 },
@@ -274,7 +270,7 @@ contract('PaymentHandler', (accounts) => {
       let price
 
       beforeEach(async () => {
-        price = await paymentHandler.price()
+        price = await subscriptionToken.price()
         await link.transfer(user1, price.sub(new BN(1)), { from: maintainer })
         assert.isTrue(price.sub(new BN(1)).eq(await link.balanceOf(user1)))
         await link.transfer(user2, price.mul(new BN(2)), { from: maintainer })
@@ -285,7 +281,7 @@ contract('PaymentHandler', (accounts) => {
         it('reverts', async () => {
           await expectRevert.unspecified(
             link.transferAndCall(
-              paymentHandler.address,
+              subscriptionToken.address,
               price.sub(new BN(1)),
               constants.ZERO_BYTES32,
               { from: user1 },
@@ -297,16 +293,16 @@ contract('PaymentHandler', (accounts) => {
       context('when equal payment is provided', () => {
         it('creates a subscription', async () => {
           const { tx } = await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             price,
             constants.ZERO_BYTES32,
             { from: user2 },
           )
-          await expectEvent.inTransaction(tx, paymentHandler, 'NewSubscription', {
+          await expectEvent.inTransaction(tx, subscriptionToken, 'NewSubscription', {
             subscriber: user2,
             subscriberId: '1',
           })
-          const expiration = await paymentHandler.subscriberExpiration(1)
+          const expiration = await subscriptionToken.subscriberExpiration(1)
           assert.closeTo(
             subscriptionDuration,
             expiration.sub(new BN(await time.latest())).toNumber(),
@@ -318,17 +314,17 @@ contract('PaymentHandler', (accounts) => {
       context('when too much payment is provided', () => {
         it('creates a subscription and sends extra payment back to the user', async () => {
           const { tx } = await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             price.mul(new BN(2)),
             constants.ZERO_BYTES32,
             { from: user2 },
           )
-          await expectEvent.inTransaction(tx, paymentHandler, 'NewSubscription', {
+          await expectEvent.inTransaction(tx, subscriptionToken, 'NewSubscription', {
             subscriber: user2,
             subscriberId: '1',
           })
           assert.isTrue(price.eq(await link.balanceOf(user2)))
-          const expiration = await paymentHandler.subscriberExpiration(1)
+          const expiration = await subscriptionToken.subscriberExpiration(1)
           assert.closeTo(
             subscriptionDuration,
             expiration.sub(new BN(await time.latest())).toNumber(),
@@ -342,12 +338,12 @@ contract('PaymentHandler', (accounts) => {
 
         beforeEach(async () => {
           await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             price,
             constants.ZERO_BYTES32,
             { from: user2 },
           )
-          previousExpiration = await paymentHandler.subscriberExpiration(1)
+          previousExpiration = await subscriptionToken.subscriberExpiration(1)
           assert.closeTo(
             subscriptionDuration,
             previousExpiration.sub(new BN(await time.latest())).toNumber(),
@@ -357,19 +353,19 @@ contract('PaymentHandler', (accounts) => {
 
         it('extends the subscription and burns the previous subscription', async () => {
           await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             price,
             web3.eth.abi.encodeParameter('uint256', 1),
             { from: user2 },
           )
-          const expiration = await paymentHandler.subscriberExpiration(2)
+          const expiration = await subscriptionToken.subscriberExpiration(2)
           assert.closeTo(
             new BN(subscriptionDuration).mul(new BN(2)).toNumber(),
             expiration.sub(new BN(await time.latest())).toNumber(),
             20,
           )
           await expectRevert(
-            subscriber.ownerOf(1),
+            subscriptionToken.ownerOf(1),
             'ERC721: owner query for nonexistent token',
           )
         })
@@ -380,12 +376,12 @@ contract('PaymentHandler', (accounts) => {
 
         beforeEach(async () => {
           await link.transferAndCall(
-            paymentHandler.address,
+            subscriptionToken.address,
             price,
             constants.ZERO_BYTES32,
             { from: user2 },
           )
-          previousExpiration = await paymentHandler.subscriberExpiration(1)
+          previousExpiration = await subscriptionToken.subscriberExpiration(1)
           assert.closeTo(
             subscriptionDuration,
             previousExpiration.sub(new BN(await time.latest())).toNumber(),
@@ -397,7 +393,7 @@ contract('PaymentHandler', (accounts) => {
         it('reverts', async () => {
           await expectRevert.unspecified(
             link.transferAndCall(
-              paymentHandler.address,
+              subscriptionToken.address,
               price,
               web3.eth.abi.encodeParameter('uint256', 1),
               { from: user2 },
