@@ -16,7 +16,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 contract SubscriptionToken is ERC721, Ownable {
   using Counters for Counters.Counter;
   using SafeMath for uint256;
-  Counters.Counter private _tokenIds;
+  Counters.Counter private _subscriptionIds;
 
   LinkTokenInterface public immutable linkToken;
   AggregatorInterface public feed;
@@ -183,8 +183,8 @@ contract SubscriptionToken is ERC721, Ownable {
     internal
     returns (uint256 _subscriberId)
   {
-    _tokenIds.increment();
-    _subscriberId = _tokenIds.current();
+    _subscriptionIds.increment();
+    _subscriberId = _subscriptionIds.current();
     _safeMint(_subscriber, _subscriberId);
   }
 }
