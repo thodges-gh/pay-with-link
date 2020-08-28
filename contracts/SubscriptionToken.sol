@@ -23,7 +23,11 @@ contract SubscriptionToken is ERC721, Ownable {
   uint256 public subscriptionDuration;
   mapping(uint256 => uint256) public subscriberExpiration;
 
-  event NewSubscription(address indexed subscriber, uint256 subscriberId, uint256 endAt);
+  event NewSubscription(
+    address indexed subscriber,
+    uint256 indexed subscriberId,
+    uint256 indexed endAt
+  );
   event SetFeed(address feed);
   event SetPaymentAmount(uint256 paymentAmount);
   event SetSubscribeDuration(uint256 subscriptionDuration);
