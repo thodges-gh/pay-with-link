@@ -10,7 +10,8 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 /**
  * @title SubscriptionToken
  * @notice NFT representing a service subscription. Deployed by a service provider,
- * allows NFTs to be issued representing a subscription.
+ * allows NFTs to be issued representing a subscription. Subscriptions (NFTs) can
+ * be traded to other addresses.
  */
 contract SubscriptionToken is ERC721, Ownable {
   using Counters for Counters.Counter;
@@ -33,6 +34,7 @@ contract SubscriptionToken is ERC721, Ownable {
   event SetSubscribeDuration(uint256 subscriptionDuration);
 
   /**
+   * @notice Deploys the SubscriptionToken contract for the service provider
    * @param _link The address of the LINK token contract
    * @param _feed The address of the LINK/USD reference feed
    * @param _paymentAmount The amount of payment per subscription
@@ -52,18 +54,19 @@ contract SubscriptionToken is ERC721, Ownable {
     ERC721(_name, _symbol)
   {
     linkToken = LinkTokenInterface(_link);
-    setFeed(_feed);
     setPaymentAmount(_paymentAmount);
+    setFeed(_feed);
     setSubscribeDuration(_subscriptionDuration);
   }
 
   /**
    * @notice Called by the LINK token on `transferAndCall`
    * @dev Subscriptions can be extended by providing the previous ID of
-   * another active subscription owned by the sender
+   * another active subscription owned by the sender. This will burn
+   * the previous subscription ID.
    * @param _sender The address submitting payment
    * @param _amount The amount of LINK for payment
-   * @param _data The encoded previous subscription ID (optional)
+   * @param _data The uint256 encoded previous subscription ID (optional)
    */
   function onTokenTransfer(
     address _sender,
@@ -118,7 +121,10 @@ contract SubscriptionToken is ERC721, Ownable {
     onlyOwner()
   {
     feed = AggregatorInterface(_feed);
-    emit SetFeed(address(_feed));
+    if (_feed != address(0)) {
+      assert(price() > 0);
+    }
+    emit SetFeed(_feed);
   }
 
   /**

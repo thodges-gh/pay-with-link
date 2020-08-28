@@ -18,10 +18,10 @@ contract('SubscriptionToken', (accounts) => {
   let subscriptionToken, link, feed
 
   beforeEach(async () => {
-    MockV2Aggregator.setProvider(web3.currentProvider)
     LinkToken.setProvider(web3.currentProvider)
-    feed = await MockV2Aggregator.new(linkUsd, { from: maintainer })
+    MockV2Aggregator.setProvider(web3.currentProvider)
     link = await LinkToken.new({ from: maintainer })
+    feed = await MockV2Aggregator.new(linkUsd, { from: maintainer })
     subscriptionToken = await SubscriptionToken.new(
       link.address,
       feed.address,
@@ -58,6 +58,14 @@ contract('SubscriptionToken', (accounts) => {
         assert.equal(constants.ZERO_ADDRESS, await subscriptionToken.feed())
         expectEvent(receipt, 'SetFeed', {
           feed: constants.ZERO_ADDRESS,
+        })
+      })
+
+      context('when the feed address is invalid', () => {
+        it('reverts', async () => {
+          await expectRevert.unspecified(
+            subscriptionToken.setFeed(user1, { from: maintainer }),
+          )
         })
       })
     })
