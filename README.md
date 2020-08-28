@@ -6,6 +6,14 @@ The owner of the contract, which would likely be the service provider, can set t
 
 Since the subscription is based on an NFT, this means that subscriptions can be traded to other addresses if the user no longer wants it. Service providers should index NFT transfers and use the address of the user with the subscription for access.
 
+## Service Providers
+
+A service provider should subscribe to the SubscriptionToken's NewSubscription and Transfer events. A NewSubscription will always include the subscriber's address, a new subscriber ID, and the subscription's expiration timestamp. Transactions that emit NewSubscription will also emit a Transfer event where the from address is the 0 address.
+
+Renewing a subscription will emit a NewSubscription as well, with the address of the subscriber, a new subscription ID, and an updated expiration timestamp. These will also emit two additional Transfer events, one to mint (the from address is the 0 address) and one to burn the previous subscription (the to address is the 0 address).
+
+Trading subscriptions will emit a Transfer event where the from address is the address trading their subscription, and the to address is the address receiving their subscription. The subscription ID and its associated expiration timestamp should be carried over to the receiving address.
+
 ## Install
 
 ``` shell
