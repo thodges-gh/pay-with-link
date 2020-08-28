@@ -153,6 +153,7 @@ contract SubscriptionToken is ERC721, Ownable {
     public
     onlyOwner()
   {
+    require(_subscriptionDuration > 0, "!subscriptionDuration");
     subscriptionDuration = _subscriptionDuration;
     emit SetSubscribeDuration(_subscriptionDuration);
   }

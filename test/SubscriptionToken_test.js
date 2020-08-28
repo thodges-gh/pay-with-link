@@ -110,6 +110,15 @@ contract('SubscriptionToken', (accounts) => {
           subscriptionDuration: '301',
         })
       })
+
+      context('when the subscriptionDuration is invalid', () => {
+        it('reverts', async () => {
+          await expectRevert(
+            subscriptionToken.setSubscribeDuration(0, { from: maintainer }),
+            '!subscriptionDuration'
+          )
+        })
+      })
     })
   })
 
