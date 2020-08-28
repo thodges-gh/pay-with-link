@@ -21,7 +21,6 @@ contract SubscriptionToken is ERC721, Ownable {
   AggregatorInterface public feed;
   uint256 public paymentAmount;
   uint256 public subscriptionDuration;
-
   mapping(uint256 => uint256) public subscriberExpiration;
 
   event NewSubscription(address indexed subscriber, uint256 subscriberId, uint256 endAt);
@@ -68,8 +67,8 @@ contract SubscriptionToken is ERC721, Ownable {
     bytes calldata _data
   )
     external
-    onlyLINK()
   {
+    require(msg.sender == address(linkToken), "!LINK");
     // reverts if not enough payment supplied
     uint256 over = _amount.sub(price());
     uint256 subscriberId = subscribe(_sender);
@@ -80,7 +79,7 @@ contract SubscriptionToken is ERC721, Ownable {
       // reverts if previousId is expired
       uint256 extension = subscriberExpiration[previousId].sub(block.timestamp);
       endAt = subscriptionDuration.add(block.timestamp).add(extension);
-      burn(previousId);
+      _burn(previousId);
     } else {
       endAt = subscriptionDuration.add(block.timestamp);
     }
@@ -91,30 +90,16 @@ contract SubscriptionToken is ERC721, Ownable {
   }
 
   /**
-   * @notice Creates a new NFT representing a new subscription
-   * @param _subscriber The address of the subscriber
+   * @notice Provides the amount of LINK to send for a subscription
    */
-  function subscribe(
-    address _subscriber
-  )
-    internal
-    returns (uint256 _subscriberId)
-  {
-    _tokenIds.increment();
-    _subscriberId = _tokenIds.current();
-    _safeMint(_subscriber, _subscriberId);
-  }
-
-  /**
-   * @notice Burns the provided subscription ID
-   * @param _subscriberId the tokenId of the NFT
-   */
-  function burn(
-    uint256 _subscriberId
-  )
-    internal
-  {
-    _burn(_subscriberId);
+  function price() public view returns (uint256 _price) {
+    // allows payment to be specified in LINK or USD
+    if (address(feed) != address(0)) {
+      uint256 currentPrice = uint256(feed.latestAnswer()).mul(1e10);
+      _price = paymentAmount.mul(1e18).div(currentPrice);
+    } else {
+      _price = paymentAmount;
+    }
   }
 
   /**
@@ -178,24 +163,17 @@ contract SubscriptionToken is ERC721, Ownable {
   }
 
   /**
-   * @notice Provides the amount of LINK to send for a subscription
+   * @notice Creates a new NFT representing a new subscription
+   * @param _subscriber The address of the subscriber
    */
-  function price() public view returns (uint256 _price) {
-    // allows payment to be specified in LINK or USD
-    if (address(feed) != address(0)) {
-      uint256 currentPrice = uint256(feed.latestAnswer()).mul(1e10);
-      _price = paymentAmount.mul(1e18).div(currentPrice);
-    } else {
-      _price = paymentAmount;
-    }
-
-  }
-
-  /**
-   * @dev Reverts if msg.sender is not the LINK token
-   */
-  modifier onlyLINK() {
-    require(msg.sender == address(linkToken), "!LINK");
-    _;
+  function subscribe(
+    address _subscriber
+  )
+    internal
+    returns (uint256 _subscriberId)
+  {
+    _tokenIds.increment();
+    _subscriberId = _tokenIds.current();
+    _safeMint(_subscriber, _subscriberId);
   }
 }
